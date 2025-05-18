@@ -21,7 +21,7 @@ def parse_json_dir(dir_path: Union[str, os.PathLike]):
         out_df = pd.concat([out_df, df])
     out_df = out_df.sort_values("Date", ascending=True).reset_index(drop=True)
 
-    out_df["Prec_Change"] = out_df.Adj_Close.diff() / out_df.Adj_Close
+    out_df["Prec_Change"] = out_df.Adj_Close.diff() / out_df.Adj_Close * 100
     return out_df.dropna()
 
 
@@ -37,10 +37,11 @@ def plot_df(df: pd.DataFrame):
 # we are going to in=gnore after-hours trading and say it is uniformly sampled in trading-days
 def construct_dataset(
     df,
-    chunk_length: int = 95,
+    seq_length: int = 94,
+    pred_samples: int = 1,
     test_frac: float = 0.25,
     val_frac: float = 0.2,
-    colname: str = "Adj_Close",
+    colname: str = "Prec_Change",
     preprocess: bool = True,
     f_range: Tuple[float, float] = (0.2, 0.8),
 ):
@@ -50,11 +51,12 @@ def construct_dataset(
             f"test_frac > 1 passed. Assuming it is number of test samples. Set test_frac to {test_frac}."
         )
 
-    # want to test in a random selection of chunks
+    # want to make a random selection of chunks
+    chunk_length = seq_length + pred_samples
     num_chunks = len(df) // chunk_length
     test_size = max(int(num_chunks * test_frac), 1)
     train_size = num_chunks - test_size
-    data = pd.DataFrame(df[colname])
+    data = pd.DataFrame(df[colname]).to_numpy()
     if preprocess:
         data = MinMaxScaler(f_range).fit_transform(data)
 
@@ -64,9 +66,13 @@ def construct_dataset(
         for i in range(len(df) // chunk_length)
     ]
     train_data = [data[index_chunks[i]] for i in train_idx]
-    train_x, train_y = zip(*[(a[:-1], a[-1]) for a in train_data])
+    train_x, train_y = zip(
+        *[(a[:-pred_samples], a[-pred_samples:].squeeze()) for a in train_data]
+    )
     test_data = [data[index_chunks[i]] for i in test_idx]
-    test_x, test_y = zip(*[(a[:-1], a[-1]) for a in test_data])
+    test_x, test_y = zip(
+        *[(a[:-pred_samples], a[-pred_samples:].squeeze()) for a in test_data]
+    )
     train_x, train_y, test_x, test_y = (
         np.array(train_x),
         np.array(train_y),
