@@ -9,7 +9,7 @@ from typing import Union, Tuple
 
 import pandas as pd
 from matplotlib import pyplot as plt
-import numpy as np
+import pennylane.numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 
@@ -74,10 +74,10 @@ def construct_dataset(
         *[(a[:-pred_samples], a[-pred_samples:].squeeze()) for a in test_data]
     )
     train_x, train_y, test_x, test_y = (
-        np.array(train_x),
-        np.array(train_y),
-        np.array(test_x),
-        np.array(test_y),
+        np.array(train_x, requires_grad=False),
+        np.array(train_y, requires_grad=False),
+        np.array(test_x, requires_grad=False),
+        np.array(test_y, requires_grad=False),
     )
     if val_frac > 0:
         val_size = max(int(len(train_x) * val_frac), 1)
