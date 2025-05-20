@@ -6,11 +6,15 @@ Created on Sun May 18 09:38:16 2025
 @author: rakshat
 """
 
+import pickle
 import pennylane as qml
 from pennylane import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn import utils
 from tqdm import trange
+
+from typing import Callable, Iterable
+from os import PathLike
 
 
 # horizon set at 1, layers at 6, as in paper
@@ -73,8 +77,9 @@ class PQN:
         input_len: int = 16,
         loss_fn=mse,
         optimizer=qml.optimize.AdamOptimizer,
-        metrics=[],
+        metrics: Iterable[Callable] = [],
         scaler=None,
+        save_path: PathLike = None,
         # batched:bool=True,
     ):
         self.pqn, self.params = build_pqn_and_params(input_len=input_len)
@@ -83,6 +88,8 @@ class PQN:
         self.opt = optimizer()
         self.loss_fn = loss_fn
         self.scaler = scaler
+        self.metrics = metrics
+        self.save_path = save_path
         # self.batched = batched
 
     def cost(self, batch_x, params, batch_y):
@@ -114,8 +121,11 @@ class PQN:
         validation_steps=None,
         validation_batch_size=None,
         validation_freq=1,
+        patience=25,
     ):
-
+        best_count = (
+            0  # how many epochs since the last best validation epoch, used for patience
+        )
         if batch_size is None:
             batch_size = len(y)
 
@@ -146,18 +156,30 @@ class PQN:
             if shuffle:
                 x, y = utils.shuffle(x, y)
             # Run validation.
+            best_count += 1
             if val_x is not None and epoch % validation_freq == 0:
                 val_cost = self.cost(batch_train_x, self.params, batch_train_y)
                 if epoch > 0:
                     if val_cost < min(val_loss):
                         self.best_weights = self.params
+                        best_count = 0
                 val_loss.append(val_cost)
                 if verbose:
                     print(f"\nEpoch {epoch} val loss: {val_cost:.5f}")
 
+            if self.best_weights is not None:
+                self.params = self.best_weights
+            if best_count > patience:
+                print(
+                    "No impprovement found after {best_count} epochs. Ending training...."
+                )
+                break
+
+        if self.save_path is not None:
+            self.save(self.save_path)
         return self.params if val_x is None else self.best_weights
 
-    def predict(self, x):
+    def predict(self, x, rescale: bool = False):
         # if self.batched and x.squeeze().ndim==1:
         #     x = qml.math.stack([x,np.zeros_like(x)])
         #     pred = self.pqn(x.squeeze(), self.params)[0]
@@ -166,10 +188,21 @@ class PQN:
 
         return (
             self.scaler.inverse_transform(pred.reshape([-1, 1]))
-            if self.scaler is not None
+            if self.scaler is not None and rescale
             else pred
         )
 
-    def evaluate(self, x, y):
-        pred_y = self.predict(x)
-        return self.loss_fn(y, pred_y)
+    def evaluate(self, x, y, rescale: bool = False):
+        pred_y = self.predict(x, rescale)
+        if rescale and self.scaler is not None:
+            y = self.scaler.inverse_transform(y.reshape([-1, 1]))
+        if len(self.metrics) == 0:
+            return self.loss_fn(y, pred_y)
+        else:
+            return [op(y, pred_y) for op in self.metrics]
+
+    def save(self, fp):
+        pickle.dump(self.params, open(fp, "wb"))
+
+    def load(self, fp):
+        self.params = pickle.load(open(fp, "rb"))
