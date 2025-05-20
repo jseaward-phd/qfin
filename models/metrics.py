@@ -9,6 +9,8 @@ Metrics from http://arxiv.org/abs/2202.00599 not found in Keras
 """
 
 from tensorflow.keras import backend as K
+from pennylane.math import stack
+from pennylane.numpy import mean
 
 
 def sesd(y_true, y_pred):
@@ -22,6 +24,10 @@ def mr(y_true, y_pred):
 
 def sdr(y_true, y_pred):
     return K.std(y_pred / y_true)
+
+
+def mse(y_true, y_pred):
+    return mean((y_true - stack(y_pred)) ** 2)
 
 
 if __name__ == "__main__":

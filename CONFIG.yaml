@@ -1,0 +1,21 @@
+common:
+    input_len = 16
+    epochs = 300
+    data_path = './historical-stock-price-tool/historical/AAPL/'
+
+pqc:
+    init:
+        blocks = 2
+        save_path = 'weights/pqc.pt'
+        pretrained_path = None
+    train:
+        verbose = False
+        batch_size = 30
+        patience = 25
+
+BiLSTM:
+    init:
+        summary = True
+        pretrained_path = None
+    train:
+        save_path = 'weights/blstm.pt'

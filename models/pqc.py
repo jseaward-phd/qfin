@@ -12,6 +12,7 @@ from pennylane import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn import utils
 from tqdm import trange
+from .metrics import mse
 
 from typing import Callable, Iterable
 from os import PathLike
@@ -26,20 +27,23 @@ def build_pqn_and_params(input_len: int = 16, blocks=2):
 
     def weighted_rot_bock(params):
         x, z, y = params
+        # paper says these are Ising gates, but what is the second qubit? there is only one readout wire.
         for wire, angle in enumerate(x):
-            qml.ops.op_math.Controlled(qml.RX(angle, read_out_wire), wire)
+            qml.ops.op_math.Controlled(qml.RX(angle * np.pi, read_out_wire), wire)
         for wire, angle in enumerate(z):
-            qml.ops.op_math.Controlled(qml.RZ(angle, read_out_wire), wire)
+            qml.ops.op_math.Controlled(qml.RZ(angle * np.pi, read_out_wire), wire)
         for wire, angle in enumerate(y):
-            qml.ops.op_math.Controlled(qml.RY(angle, read_out_wire), wire)
+            qml.ops.op_math.Controlled(qml.RY(angle * np.pi, read_out_wire), wire)
 
     @qml.qnode(dev)
     def circuit(inputs, params):  # assumes data is scaled between 0 and 1
         # print("input shape: ", inputs.shape)
         # print("params shape: ", params.shape)
-        # for wire, day in enumerate(inputs):
+        # for wire, day in enumerate(inputs.squeeze()):
         #     qml.X(wire) ** day
-        qml.AngleEmbedding(inputs.squeeze(), list(range(input_len)))
+
+        # not an exponentiated PauliX but allows batching and X**feature gives the wrong phase anyway
+        qml.AngleEmbedding(inputs.squeeze() * np.pi, range(input_len))
 
         qml.layer(weighted_rot_bock, blocks, params)
         # x0, z0, y0, x1, z1, y1 = params
@@ -58,23 +62,17 @@ def build_pqn_and_params(input_len: int = 16, blocks=2):
 
         return qml.expval(qml.Z(read_out_wire))
 
-    params = (
-        qml.math.stack(
-            [np.random.rand(3, input_len, requires_grad=True) for _ in range(blocks)]
-        )
-        * np.pi
+    params = qml.math.stack(
+        [np.random.rand(3, input_len, requires_grad=True) for _ in range(blocks)]
     )
     return circuit, params
-
-
-def mse(y_true, y_pred):
-    return np.mean((y_true - qml.math.stack(y_pred)) ** 2)
 
 
 class PQN:
     def __init__(
         self,
         input_len: int = 16,
+        blocks: int = 2,
         loss_fn=mse,
         optimizer=qml.optimize.AdamOptimizer,
         metrics: Iterable[Callable] = [],
@@ -82,7 +80,7 @@ class PQN:
         save_path: PathLike = None,
         # batched:bool=True,
     ):
-        self.pqn, self.params = build_pqn_and_params(input_len=input_len)
+        self.pqn, self.params = build_pqn_and_params(input_len=input_len, blocks=blocks)
         # if batched:
         #     self.pqn = qml.batch_input(self.pqn, argnum=0)
         self.opt = optimizer()
