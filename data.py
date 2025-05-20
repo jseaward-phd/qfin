@@ -58,7 +58,8 @@ def construct_dataset(
     train_size = num_chunks - test_size
     data = pd.DataFrame(df[colname]).to_numpy()
     if preprocess:
-        data = MinMaxScaler(f_range).fit_transform(data)
+        scaler = MinMaxScaler(f_range)
+        data = scaler.fit_transform(data)
 
     train_idx, test_idx = train_test_split(np.arange(num_chunks), train_size=train_size)
     index_chunks = [
@@ -84,9 +85,30 @@ def construct_dataset(
         train_x, val_x, train_y, val_y = train_test_split(
             train_x, train_y, test_size=val_size
         )
-        return train_x, train_y, test_x, test_y, val_x, val_y
+        return (
+            (train_x, train_y, test_x, test_y, val_x, val_y, scaler)
+            if preprocess
+            else (
+                train_x,
+                train_y,
+                test_x,
+                test_y,
+                val_x,
+                val_y,
+            )
+        )
+
     else:
-        return train_x, train_y, test_x, test_y
+        return (
+            (train_x, train_y, test_x, test_y, scaler)
+            if preprocess
+            else (
+                train_x,
+                train_y,
+                test_x,
+                test_y,
+            )
+        )
 
 
 if __name__ == "__main__":

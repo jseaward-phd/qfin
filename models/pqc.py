@@ -15,13 +15,13 @@ from tqdm import trange
 
 # horizon set at 1, layers at 6, as in paper
 # need to parrallelize/batch this correctly
-def build_pqn_and_params(input_len: int = 16):
+def build_pqn_and_params(input_len: int = 16, blocks=2):
 
     dev = qml.device("default.qubit", wires=input_len + 1)
     read_out_wire = input_len
-    
+
     def weighted_rot_bock(params):
-        x,z,y = params
+        x, z, y = params
         for wire, angle in enumerate(x):
             qml.ops.op_math.Controlled(qml.RX(angle, read_out_wire), wire)
         for wire, angle in enumerate(z):
@@ -31,12 +31,13 @@ def build_pqn_and_params(input_len: int = 16):
 
     @qml.qnode(dev)
     def circuit(inputs, params):  # assumes data is scaled between 0 and 1
-
+        # print("input shape: ", inputs.shape)
+        # print("params shape: ", params.shape)
         # for wire, day in enumerate(inputs):
         #     qml.X(wire) ** day
-        qml.AngleEmbedding(inputs.squeeze(),list(range(input_len)))
+        qml.AngleEmbedding(inputs.squeeze(), list(range(input_len)))
 
-        qml.layer(weighted_rot_bock,2,params)
+        qml.layer(weighted_rot_bock, blocks, params)
         # x0, z0, y0, x1, z1, y1 = params
         # for wire, angle in enumerate(x0):
         #     qml.ops.op_math.Controlled(qml.RX(angle, read_out_wire), wire)
@@ -53,8 +54,12 @@ def build_pqn_and_params(input_len: int = 16):
 
         return qml.expval(qml.Z(read_out_wire))
 
-    params = qml.math.stack([np.random.rand(3, input_len),
-                             np.random.rand(3, input_len)],requires_grad=True)* np.pi 
+    params = (
+        qml.math.stack(
+            [np.random.rand(3, input_len, requires_grad=True) for _ in range(blocks)]
+        )
+        * np.pi
+    )
     return circuit, params
 
 
@@ -69,25 +74,35 @@ class PQN:
         loss_fn=mse,
         optimizer=qml.optimize.AdamOptimizer,
         metrics=[],
+        scaler=None,
+        # batched:bool=True,
     ):
         self.pqn, self.params = build_pqn_and_params(input_len=input_len)
+        # if batched:
+        #     self.pqn = qml.batch_input(self.pqn, argnum=0)
         self.opt = optimizer()
         self.loss_fn = loss_fn
+        self.scaler = scaler
+        # self.batched = batched
 
     def cost(self, batch_x, params, batch_y):
-        pred_y = []
-        for x_sample in batch_x:
-            pred_y.append(self.pqn(x_sample.squeeze(), params))
-        pred_y = np.array(pred_y, requires_grad=True)
+        # if self.batched and batch_x.squeeze().ndim==1:
+        #     batch_x = qml.math.stack([batch_x,np.zeros_like(batch_x)])
+        #     pred_y = self.pqn(batch_x.squeeze(), params)[0]
+        # else:
+        pred_y = self.pqn(batch_x.squeeze(), params)
+        # for x_sample in batch_x:
+        #     pred_y.append(self.pqn(x_sample.squeeze(), params))
+        # pred_y = np.array(pred_y, requires_grad=True)
         return self.loss_fn(batch_y, pred_y)
 
     def fit(
         self,
         x=None,
         y=None,
-        batch_size=None,
         epochs=1,
-        # verbose="auto",
+        batch_size=None,
+        verbose: bool = True,
         # callbacks=None,
         validation_split=0.0,
         validation_data=None,
@@ -125,7 +140,8 @@ class PQN:
                 (_, self.params, _), cost = self.opt.step_and_cost(
                     self.cost, batch_train_x, self.params, batch_train_y
                 )
-                print(f"Train batch {batch_num//batch_size+1} cost: {cost:.3f}\n")
+                if verbose:
+                    print(f"Train batch {batch_num//batch_size+1} cost: {cost:.5f}\n")
 
             if shuffle:
                 x, y = utils.shuffle(x, y)
@@ -136,18 +152,23 @@ class PQN:
                     if val_cost < min(val_loss):
                         self.best_weights = self.params
                 val_loss.append(val_cost)
-                print(f"\nEpoch {epoch} val loss: {val_cost:.3f}")
+                if verbose:
+                    print(f"\nEpoch {epoch} val loss: {val_cost:.5f}")
 
         return self.params if val_x is None else self.best_weights
 
     def predict(self, x):
-        if x.ndim > 2:
-            pred_y = []
-            for x_sample in x:
-                pred_y.append(self.pqn(x_sample.squeeze(), self.params))
-            return np.array(pred_y, requires_grad=True)
-        else:
-            return self.pqn(x.squeeze(), self.params)
+        # if self.batched and x.squeeze().ndim==1:
+        #     x = qml.math.stack([x,np.zeros_like(x)])
+        #     pred = self.pqn(x.squeeze(), self.params)[0]
+        # else:
+        pred = self.pqn(x.squeeze(), self.params)
+
+        return (
+            self.scaler.inverse_transform(pred.reshape([-1, 1]))
+            if self.scaler is not None
+            else pred
+        )
 
     def evaluate(self, x, y):
         pred_y = self.predict(x)
