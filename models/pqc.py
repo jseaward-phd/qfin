@@ -19,30 +19,42 @@ def build_pqn_and_params(input_len: int = 16):
 
     dev = qml.device("default.qubit", wires=input_len + 1)
     read_out_wire = input_len
+    
+    def weighted_rot_bock(params):
+        x,z,y = params
+        for wire, angle in enumerate(x):
+            qml.ops.op_math.Controlled(qml.RX(angle, read_out_wire), wire)
+        for wire, angle in enumerate(z):
+            qml.ops.op_math.Controlled(qml.RZ(angle, read_out_wire), wire)
+        for wire, angle in enumerate(y):
+            qml.ops.op_math.Controlled(qml.RY(angle, read_out_wire), wire)
 
     @qml.qnode(dev)
     def circuit(inputs, params):  # assumes data is scaled between 0 and 1
 
-        for wire, day in enumerate(inputs):
-            qml.X(wire) ** day
+        # for wire, day in enumerate(inputs):
+        #     qml.X(wire) ** day
+        qml.AngleEmbedding(inputs.squeeze(),list(range(input_len)))
 
-        x0, z0, y0, x1, z1, y1 = params
-        for wire, angle in enumerate(x0):
-            qml.ops.op_math.Controlled(qml.RX(angle, read_out_wire), wire)
-        for wire, angle in enumerate(z0):
-            qml.ops.op_math.Controlled(qml.RZ(angle, read_out_wire), wire)
-        for wire, angle in enumerate(y0):
-            qml.ops.op_math.Controlled(qml.RY(angle, read_out_wire), wire)
-        for wire, angle in enumerate(x1):
-            qml.ops.op_math.Controlled(qml.RX(angle, read_out_wire), wire)
-        for wire, angle in enumerate(z1):
-            qml.ops.op_math.Controlled(qml.RZ(angle, read_out_wire), wire)
-        for wire, angle in enumerate(y1):
-            qml.ops.op_math.Controlled(qml.RY(angle, read_out_wire), wire)
+        qml.layer(weighted_rot_bock,2,params)
+        # x0, z0, y0, x1, z1, y1 = params
+        # for wire, angle in enumerate(x0):
+        #     qml.ops.op_math.Controlled(qml.RX(angle, read_out_wire), wire)
+        # for wire, angle in enumerate(z0):
+        #     qml.ops.op_math.Controlled(qml.RZ(angle, read_out_wire), wire)
+        # for wire, angle in enumerate(y0):
+        #     qml.ops.op_math.Controlled(qml.RY(angle, read_out_wire), wire)
+        # for wire, angle in enumerate(x1):
+        #     qml.ops.op_math.Controlled(qml.RX(angle, read_out_wire), wire)
+        # for wire, angle in enumerate(z1):
+        #     qml.ops.op_math.Controlled(qml.RZ(angle, read_out_wire), wire)
+        # for wire, angle in enumerate(y1):
+        #     qml.ops.op_math.Controlled(qml.RY(angle, read_out_wire), wire)
 
         return qml.expval(qml.Z(read_out_wire))
 
-    params = np.random.rand(6, input_len, requires_grad=True) * np.pi * 2
+    params = qml.math.stack([np.random.rand(3, input_len),
+                             np.random.rand(3, input_len)],requires_grad=True)* np.pi 
     return circuit, params
 
 
@@ -129,7 +141,7 @@ class PQN:
         return self.params if val_x is None else self.best_weights
 
     def predict(self, x):
-        if len(x.shape) > 2:
+        if x.ndim > 2:
             pred_y = []
             for x_sample in x:
                 pred_y.append(self.pqn(x_sample.squeeze(), self.params))
