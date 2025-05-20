@@ -169,7 +169,7 @@ class PQN:
                 self.params = self.best_weights
             if best_count > patience:
                 print(
-                    "No impprovement found after {best_count} epochs. Ending training...."
+                    f"No impprovement found after {best_count} epochs. Ending training...."
                 )
                 break
 
@@ -199,8 +199,12 @@ class PQN:
         else:
             return [op(y, pred_y) for op in self.metrics]
 
-    def save(self, fp):
+    def save(self, fp=None):
+        if fp is None:
+            fp = self.save_path
         pickle.dump(self.params, open(fp, "wb"))
 
-    def load(self, fp):
+    def load(self, fp=None):
+        if fp is None:
+            fp = self.save_path
         self.params = pickle.load(open(fp, "rb"))
