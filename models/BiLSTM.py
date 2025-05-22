@@ -14,7 +14,18 @@ from .metrics import sesd, mr, sdr
 
 # build model
 # TODO: config setting/file
-def build_BLSTM(input_len: int = 94, horizon: int = 1, summary: bool = True):
+def build_BLSTM(
+    input_len: int = 16,
+    horizon: int = 1,
+    summary: bool = True,
+    metrics=["mse", sesd, mr, sdr],
+    optimizer=None,
+) -> K.Model:
+
+    # passing optimizer and its arguments not implimented
+    if optimizer is None:
+        optimizer = K.optimizers.Adam()
+
     inputs = K.Input(shape=[input_len, 1])
     x = layers.Bidirectional(
         layers.LSTM(128, activation="tanh", return_sequences=True), merge_mode="sum"
@@ -35,8 +46,8 @@ def build_BLSTM(input_len: int = 94, horizon: int = 1, summary: bool = True):
         model.summary()
     model.compile(
         loss=tf.losses.mse,
-        optimizer=K.optimizers.Adam(),
-        metrics=["mse", sesd, mr, sdr],
+        optimizer=optimizer,
+        metrics=metrics,
     )
     return model
 

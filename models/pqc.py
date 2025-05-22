@@ -12,7 +12,7 @@ from pennylane import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn import utils
 from tqdm import trange
-from .metrics import mse
+from .metrics import qmse
 
 from typing import Callable, Iterable
 from os import PathLike
@@ -73,7 +73,7 @@ class PQN:
         self,
         input_len: int = 16,
         blocks: int = 2,
-        loss_fn=mse,
+        loss_fn: Callable = qmse,
         optimizer=qml.optimize.AdamOptimizer,
         metrics: Iterable[Callable] = [],
         scaler=None,
@@ -198,6 +198,9 @@ class PQN:
             return self.loss_fn(y, pred_y)
         else:
             return [op(y, pred_y) for op in self.metrics]
+
+    def compare(self, x, y, rescale: bool = False):
+        return list(zip([a.item() for a in self.predict(x, rescale=rescale)], y))
 
     def save(self, fp=None):
         if fp is None:

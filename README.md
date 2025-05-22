@@ -10,6 +10,6 @@ pip install -r requirements.txt
 or the necessary requirements can be installed by running
 
 ```
-pip install pandas pennylane sklearn tensorflow tqdm
+pip install pandas pennylane sklearn tensorflow tqdm yfinance
 ```
 for a more flexible installation.
