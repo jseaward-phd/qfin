@@ -4,9 +4,10 @@ Spyder Editor
 
 This is a temporary script file.
 """
-import os
+
 from typing import Union, Tuple
 
+import yfinance as yf
 import pandas as pd
 from matplotlib import pyplot as plt
 import pennylane.numpy as np
@@ -14,29 +15,39 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 
 
-def parse_json_dir(dir_path: Union[str, os.PathLike]):
-    out_df = pd.DataFrame()
-    for fn in os.listdir(dir_path):
-        df = pd.read_json(os.path.join(dir_path, fn))
-        out_df = pd.concat([out_df, df])
-    out_df = out_df.sort_values("Date", ascending=True).reset_index(drop=True)
+# def parse_json_dir(dir_path: Union[str, os.PathLike]):
+#     out_df = pd.DataFrame()
+#     for fn in os.listdir(dir_path):
+#         df = pd.read_json(os.path.join(dir_path, fn))
+#         out_df = pd.concat([out_df, df])
+#     out_df = out_df.sort_values("Date", ascending=True).reset_index(drop=True)
 
-    out_df["Prec_Change"] = out_df.Adj_Close.diff() / out_df.Adj_Close * 100
-    return out_df.dropna()
+#     out_df["Prec_Change"] = out_df.Adj_Close.diff() / out_df.Adj_Close * 100
+#     return out_df.dropna()
 
 
-def plot_df(df: pd.DataFrame):
-    plt.plot_date(df.Date, df.Adj_Close, ".k")
-    assert len(df.Symbol.unique()) == 1, "Only do one stock at a time."
-    plt.title("$" + df.Symbol[0])
-    plt.xlabel("Date")
-    plt.ylabel("Adjusted Close Price")
-    plt.show()
+def get_yfin_data(*tickers: str, start=None, end=None) -> pd.DataFrame:
+    data = yf.download(
+        tickers, auto_adjust=False, start=start, end=end, multi_level_index=True
+    )
+    for ticker in data.columns.levels[1]:
+        data["Perc_Change", ticker] = data["Close", ticker].pct_change()
+    return data
+
+
+def plot_multidf(df: pd.DataFrame) -> None:
+    for ticker in df.columns.levels[1]:
+        plt.plot(df.index, df["Close"][ticker], ".k")
+        plt.title("$" + ticker)
+        plt.xlabel("Date")
+        plt.ylabel("Split-Adjusted Close Price")
+        plt.show()
 
 
 # we are going to in=gnore after-hours trading and say it is uniformly sampled in trading-days
 def construct_dataset(
     df,
+    ticker: str = "AAPL",
     seq_length: int = 94,
     pred_samples: int = 1,
     test_frac: float = 0.25,
@@ -44,7 +55,7 @@ def construct_dataset(
     colname: str = "Prec_Change",
     preprocess: bool = True,
     f_range: Tuple[float, float] = (0.2, 0.8),
-):
+) -> Union[Tuple[np.ndarray, ..., MinMaxScaler], Tuple[np.ndarray, ...]]:
     if test_frac > 1:
         test_frac = test_frac / len(df)
         print(
@@ -56,7 +67,7 @@ def construct_dataset(
     num_chunks = len(df) // chunk_length
     test_size = max(int(num_chunks * test_frac), 1)
     train_size = num_chunks - test_size
-    data = pd.DataFrame(df[colname]).to_numpy()
+    data = pd.DataFrame(df[colname][ticker]).to_numpy()
     if preprocess:
         scaler = MinMaxScaler(f_range)
         data = scaler.fit_transform(data)
