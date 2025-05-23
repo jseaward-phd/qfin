@@ -66,23 +66,43 @@ else:
 # BiLSTM
 # setup
 init_params = CONFIG["models"]["BiLSTM"]["init"]
-pt_path = init_params["pretrained_path"]
-
+train_params = CONFIG["models"]["BiLSTM"]["train"]
+save_dir = os.path.join(init_params['save_dir'],'BiLSTM')
+if not os.path.exists(save_dir):
+    os.makedirs(save_dir)
 metric_fns = [METRICS[x] for x in init_params["metrics"] + init_params["add_metrics"]]
 
-model = build_BLSTM(
-    input_len=init_params["past_len"],
-    summary=init_params["summary"],
-    metrics=metric_fns,
-)
-if pt_path:
-    model.load_weights(pt_path)
+for ticker in tickers:
+    stock_path = os.path.join(save_dir,ticker)
+    os.makedirs(stock_path)
+    data_in = data_dict_BLSTM[ticker]
+    model = build_BLSTM(
+        input_len=init_params["past_len"],
+        summary=init_params["summary"],
+        metrics=metric_fns,
+    )
+    # TODO: add incrementing logic so new trainings doenn't overwright pt weights
+    weight_path = os.path.join(save_dir,ticker,'pt.weights.h5')
+    if init_params['load_pretrained']:
+        try:
+            model.load_weights(weight_path)
+        except Exception as e:
+            print(f'Exception: {e} encoutered while trying to load weights. Are the weights there?')
+        
+    # train
+    # TODO: add checkpointing callback fn
+    #       add tb logging
 
-# train
-# TODO: add checkpointing callback fn
-train_params = CONFIG["models"]["BiLSTM"]["train"]
-if train_params["train"]:
-    model.fit(x=data_dict_BLSTM)
+    if train_params["train"]:
+        train_args_dict = {'x':data_in['train_x'],
+                        'y': data_in['train_y'],
+                        "epochs": train_params['epochs'],
+                        'validation_data' : (data_in['val_x'], data_in['val_y'])}
+        model.fit(**train_args_dict)
+        model.save_weights(weight_path)
+    
+    if CONFIG["models"]["BiLSTM"]["test"]:
+        
 
 # PQC
 init_params = CONFIG["models"]["PQC"]["init"]

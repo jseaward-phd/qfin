@@ -1,8 +1,7 @@
-lengths: &seq_lens
-  past_len: 16
- # horizon: 1 this has to be 1 due to the pqc architechture.
 data:
-  <<: *seq_lens
+  lengths: &seq_lens
+    past_len: 16
+   # horizon: 1 this has to be 1 due to the pqc architechture.
   ticker_symols:
     - AAPL
   # data_path: null
@@ -30,17 +29,17 @@ models:
         - sdr
     train: &commtrain
       epochs: 300
+      load_pretrained: False # can overwrite in model sections
+      save_dir: ./results # then do <model>/<ticker>/weights.pt & results
   BiLSTM:
     init:
       <<: *comminit
       add_metrics: 
         - mse
       summary: true
-      pretrained_path: null
     train:
       <<: *commtrain
       train: true
-      save_path: weights/blstm.pt
     test: true
   PQC:
     init:
@@ -48,12 +47,14 @@ models:
       add_metrics:
         - qmse
       blocks: 2
-      save_path: weights/pqc.pt
-      pretrained_path: null
     train:
       <<: *commtrain
       train: true
-      verbose: false
-      batch_size: 50
-      patience: 25
+      kwargs:
+        verbose: false
+        batch_size: 30
+        patience: 25
+        shuffle: true,
+        initial_epoch: 0,
+        validation_freq: 1,
     test: true

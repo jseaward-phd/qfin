@@ -113,11 +113,11 @@ class PQN:
         validation_data=None,
         shuffle=True,
         # class_weight=None,
-        # sample_weight=None,
+        # sample_weight=None,load_pretrain: False
         initial_epoch=0,
-        steps_per_epoch=None,
-        validation_steps=None,
-        validation_batch_size=None,
+        # steps_per_epoch=None,
+        # validation_steps=None,
+        # validation_batch_size=None,
         validation_freq=1,
         patience=25,
     ):

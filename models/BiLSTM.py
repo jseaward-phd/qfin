@@ -51,6 +51,7 @@ def build_BLSTM(
     )
     return model
 
+#TODO:    test and comparison functions that undo the scaling
 
 if __name__ == "__main__":
     pass
