@@ -121,9 +121,9 @@ class PQN:
         validation_freq=1,
         patience=25,
     ):
-        best_count = (
-            0  # how many epochs since the last best validation epoch, used for patience
-        )
+        # how many epochs since the last best validation epoch, used for patience
+        best_count = 0
+
         if batch_size is None:
             batch_size = len(y)
 
@@ -200,7 +200,10 @@ class PQN:
         else:
             if verbose:
                 for op in self.metrics:
-                    print(op.__name__, ": ", op(y, pred_y))
+                    if isinstance(op(y, pred_y), (np.tensor, int, float)):
+                        print(op.__name__, ": ", op(y, pred_y))
+                    else:
+                        print(op.__name__, ": ", op(y, pred_y).numpy().item())
             return [op(y, pred_y) for op in self.metrics]
 
     def compare(self, x, y, rescale: bool = False):

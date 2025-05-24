@@ -29,20 +29,20 @@ models:
         - sesd
         - mr
         - sdr
+      save_dir: ./results # then do <model>/<ticker>/<model> + weights.pt & results
     train: &commtrain
       epochs: 1
       load_pretrained: false # can overwrite in model sections
-      save_dir: ./results # then do <model>/<ticker>/<model> + weights.pt & results
   BiLSTM:
     init:
       <<: *comminit
       add_metrics: 
         - mse
       summary: true
+      pt_filename: best.weights.h5
     train:
       <<: *commtrain
       train: true
-      pt_filename: best.weights.h5
       weight_save_filename: trained.weights.h5
     test: true
   PQC:
@@ -51,16 +51,16 @@ models:
       add_metrics:
         - qmse
       blocks: 2
+      pt_filename: best.params
     train:
       <<: *commtrain
       train: true
-      pt_filename: best.params
       weight_save_filename: trained.params
       kwargs:
         verbose: false
         batch_size: 30
         patience: 25
-        shuffle: true,
-        initial_epoch: 0,
-        validation_freq: 1,
+        shuffle: true
+        initial_epoch: 0
+        validation_freq: 1
     test: true

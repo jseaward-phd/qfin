@@ -6,12 +6,14 @@ Created on Tue May 20 14:40:34 2025
 @author: rakshat
 """
 
-import os, sys
+import os
 import yaml
 
 # import pandas as pd # TODO: save results as csv
 
 from models import metrics
+
+from contextlib import redirect_stdout
 
 
 METRICS = {
@@ -31,70 +33,81 @@ def blstm_loop(blstm_config, data_dict):
     init_params = blstm_config["init"]
     init_params["metrics"] = init_params["metrics"] + init_params["add_metrics"]
     del init_params["add_metrics"]
-    train_params = blstm_config["BiLSTM"]["train"]
+    train_params = blstm_config["train"]
 
     metric_fns = [METRICS[x] for x in init_params["metrics"]]
 
     for ticker in data_dict.keys():
+        print(f"Processing {ticker} data...")
         stock_path = os.path.join(init_params["save_dir"], ticker, "BiLSTM")
         if not os.path.exists(stock_path):
             os.makedirs(stock_path)
 
         data_in = data_dict[ticker]
+        with open(os.path.join(stock_path, "log.txt"), "a") as f:
+            with redirect_stdout(f):
+                model = build_BLSTM(
+                    input_len=init_params["past_len"],
+                    summary=init_params["summary"],
+                    metrics=metric_fns,
+                )
 
-        with open(os.path.join(stock_path, "log.txt", "a")) as sys.stdout:  # for lo
-            model = build_BLSTM(
-                input_len=init_params["past_len"],
-                summary=init_params["summary"],
-                metrics=metric_fns,
-            )
+                pt_weight_path = os.path.join(stock_path, init_params["pt_filename"])
+                if train_params["load_pretrained"]:
+                    print(f"Loading weights from {pt_weight_path}...")
+                    try:
+                        model.load_weights(pt_weight_path)
+                    except Exception as e:
+                        print(
+                            f"Exception: {e} encoutered while trying to load weights. Are the weights there?"
+                        )
 
-            pt_weight_path = os.path.join(stock_path, init_params["pt_filename"])
-            if init_params["load_pretrained"]:
-                print(f"Loading weights from {pt_weight_path}...")
-                try:
-                    model.load_weights(pt_weight_path)
-                except Exception as e:
-                    print(
-                        f"Exception: {e} encoutered while trying to load weights. Are the weights there?"
+                # train
+                # TODO: Expects validatin data
+                """
+                TODO:
+                callbacks for logging (e.g. tf.keras.callbacks.TensorBoard(log_dir='./logs') ),
+                lr sceduler (e.g. tf.keras.callbacks.LearningRateScheduler(lambda epoch: 1e-3 * 10**(epoch / 20))),
+                and early stopping (e.g. tf.keras.callbacks.EarlyStopping(patience=5, restore_best_weights=True) )
+                are passed to the callbacks argument of model.fit as a list
+                """
+
+                if train_params["train"]:
+                    weight_save_path = os.path.join(
+                        stock_path, train_params["weight_save_filename"]
                     )
+                    train_args_dict = {
+                        "x": data_in["train_x"],
+                        "y": data_in["train_y"],
+                        "epochs": train_params["epochs"],
+                        "validation_data": (data_in["val_x"], data_in["val_y"]),
+                    }
+                    print(f"Training paramters: {train_args_dict}\n")
+                    model.fit(**train_args_dict)
+                    model.save_weights(weight_save_path)
+                    print(f"Model weights saved at {weight_save_path}.")
 
-            # train
-            # TODO: Expects validatin data
-            """
-            TODO:
-            callbacks for logging (e.g. tf.keras.callbacks.TensorBoard(log_dir='./logs') ),
-            lr sceduler (e.g. tf.keras.callbacks.LearningRateScheduler(lambda epoch: 1e-3 * 10**(epoch / 20))),
-            and early stopping (e.g. tf.keras.callbacks.EarlyStopping(patience=5, restore_best_weights=True) )
-            are passed to the callbacks argument of model.fit as a list
-            """
-
-            if train_params["train"]:
-                weight_save_path = os.path.join(
-                    stock_path, init_params["weight_save_filename"]
-                )
-                train_args_dict = {
-                    "x": data_in["train_x"],
-                    "y": data_in["train_y"],
-                    "epochs": train_params["epochs"],
-                    "validation_data": (data_in["val_x"], data_in["val_y"]),
-                }
-                print(f"Training paramters: {train_args_dict}\n")
-                model.fit(**train_args_dict)
-                model.save_weights(weight_save_path)
-                print(f"Model weights saved at {weight_save_path}.")
-
-            # test
-            if blstm_config["test"]:
-                print("Unscaled evaluation:")
-                model.evaluate(data_in["test_x"], data_in["test_y"])
-                y_pred = data_in["scaler"].inverse_transform(
-                    model.predict(data_in["test_x"])
-                )
-                y_true = data_in["scaler"].inverse_transform(data_in["test_y"])
-                print("Rescaled evaluation:")
-                for m in init_params["metrics"]:
-                    print(m, ": ", METRICS[m](y_true, y_pred))
+                # test
+                if blstm_config["test"]:
+                    print("\nUnscaled evaluation:")
+                    model.evaluate(data_in["test_x"], data_in["test_y"])
+                    y_pred = data_in["scaler"].inverse_transform(
+                        model.predict(data_in["test_x"])
+                    )
+                    y_true = data_in["scaler"].inverse_transform(
+                        data_in["test_y"].reshape([-1, 1])
+                    )
+                    print("\nRescaled evaluation:")
+                    for m in init_params["metrics"]:
+                        # kind of hacky, is not so flexible for other loss functions
+                        if isinstance(METRICS[m], str):
+                            print(
+                                m,
+                                ": ",
+                                model.loss(y_true, y_pred).numpy().mean().item(),
+                            )
+                        else:
+                            print(m, ": ", METRICS[m](y_true, y_pred).numpy().item())
     return
 
 
@@ -110,55 +123,62 @@ def pqc_loop(pqc_config, data_dict):
     metric_fns = [METRICS[x] for x in init_params["metrics"]]
 
     for ticker in data_dict.keys():
+
+        print(f"Processing {ticker} data...")
         stock_path = os.path.join(init_params["save_dir"], ticker, "PQC")
         if not os.path.exists(stock_path):
             os.makedirs(stock_path)
 
         data_in = data_dict[ticker]
 
-        with open(os.path.join(stock_path, "log.txt", "a")) as sys.stdout:  # for lo
-
-            pqc = PQN(
-                input_len=init_params["past_len"],
-                blocks=init_params["blocks"],
-                metrics=metric_fns,
-                scaler=data_in["scaler"],
-                save_path=os.path.join(
-                    stock_path, init_params["weight_save_filenamee"]
-                ),
-            )
-
-            pt_weight_path = os.path.join(stock_path, init_params["pt_filename"])
-            if init_params["load_pretrained"]:
-                print(f"Loading weights from {pt_weight_path}...")
-                try:
-                    pqc.load(pt_weight_path)
-                except Exception as e:
-                    print(
-                        f"Exception: {e} encoutered while trying to load weights. Are the weights there?"
-                    )
-
-            # train
-            # TODO: Expects validatin data
-            if train_params["train"]:
-                train_args_dict = {
-                    "x": data_in["train_x"],
-                    "y": data_in["train_y"],
-                    "epochs": train_params["epochs"],
-                    "validation_data": (data_in["val_x"], data_in["val_y"]),
-                    **train_params["kwargs"],
-                }
-                print(f"Training paramters: {train_args_dict}\n")
-                pqc.fit(**train_args_dict)
-
-            # test
-            if pqc_config["test"]:
-                print("Rescaled output comparison:")
-                print(pqc.compare(data_in["test_x"], data_in["test_y"], rescale=True))
-                print("Rescaled evaluation:")
-                pqc.evaluate(
-                    data_in["test_x"], data_in["test_y"], rescale=True, verbose=True
+        with open(os.path.join(stock_path, "log.txt"), "a") as f:
+            with redirect_stdout(f):
+                pqc = PQN(
+                    input_len=init_params["past_len"],
+                    blocks=init_params["blocks"],
+                    metrics=metric_fns,
+                    scaler=data_in["scaler"],
+                    save_path=os.path.join(
+                        stock_path, train_params["weight_save_filename"]
+                    ),
                 )
+
+                pt_weight_path = os.path.join(stock_path, init_params["pt_filename"])
+                if train_params["load_pretrained"]:
+                    print(f"Loading weights from {pt_weight_path}...")
+                    try:
+                        pqc.load(pt_weight_path)
+                    except Exception as e:
+                        print(
+                            f"Exception: {e} encoutered while trying to load weights. Are the weights there?"
+                        )
+
+                # train
+                # TODO: Expects validatin data
+                if train_params["train"]:
+                    train_args_dict = {
+                        "x": data_in["train_x"],
+                        "y": data_in["train_y"],
+                        "epochs": train_params["epochs"],
+                        "validation_data": (data_in["val_x"], data_in["val_y"]),
+                        **train_params["kwargs"],
+                    }
+                    print(f"Training paramters: {train_args_dict}\n")
+                    pqc.fit(**train_args_dict)
+
+                # test
+                if pqc_config["test"]:
+                    print("Rescaled output comparison:")
+                    [
+                        print(a, b.item())
+                        for a, b in pqc.compare(
+                            data_in["test_x"], data_in["test_y"], rescale=True
+                        )
+                    ]
+                    print("Rescaled evaluation:")
+                    pqc.evaluate(
+                        data_in["test_x"], data_in["test_y"], rescale=True, verbose=True
+                    )
 
     return
 
@@ -181,6 +201,7 @@ def main(args):
         # raw_data = data.parse_json_data(CONFIG['data']['data_path'])
     else:
         raw_data = data.get_yfin_data(*tickers, start=start, end=end)
+        # TODO: Error handle failed download
         data_dict_BLSTM = data.datasets_from_multiindex(
             raw_data, seq_length=seq_length, f_range=f_range, **data_params["kwargs"]
         )
@@ -195,8 +216,10 @@ def main(args):
     blstm_config = CONFIG["models"]["BiLSTM"]
     pqc_config = CONFIG["models"]["PQC"]
 
-    blstm_loop(blstm_config, data_dict_BLSTM)
+    # blstm_loop(blstm_config, data_dict_BLSTM)
     pqc_loop(pqc_config, data_dict_PQC)
+
+    print("Done!")
 
     return
 
