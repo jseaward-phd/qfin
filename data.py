@@ -74,13 +74,14 @@ def construct_dataset(
 
     if quantum:
         f_range = (0, 1)
+
     # want to make a random selection of chunks
     chunk_length = seq_length + pred_samples
     num_chunks = len(df) // chunk_length
     test_size = max(int(num_chunks * test_frac), 1)
     train_size = num_chunks - test_size
     data = (
-        pd.DataFrame(df[colname][ticker]).to_numpy()
+        pd.DataFrame(df[colname][ticker]).dropna().to_numpy()
         if ticker
         else pd.DataFrame(df[colname]).to_numpy()
     )

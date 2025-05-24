@@ -76,11 +76,12 @@ for ticker in tickers:
     stock_path = os.path.join(save_dir,ticker)
     os.makedirs(stock_path)
     data_in = data_dict_BLSTM[ticker]
-    model = build_BLSTM(
-        input_len=init_params["past_len"],
-        summary=init_params["summary"],
-        metrics=metric_fns,
-    )
+    with open(os.path.join(stock_path,'log.txt', 'a')) as sys.stdout:  # for lo
+        model = build_BLSTM(
+            input_len=init_params["past_len"],
+            summary=init_params["summary"],
+            metrics=metric_fns,
+        )
     # TODO: add incrementing logic so new trainings doenn't overwright pt weights
     weight_path = os.path.join(save_dir,ticker,'pt.weights.h5')
     if init_params['load_pretrained']:
@@ -90,10 +91,16 @@ for ticker in tickers:
             print(f'Exception: {e} encoutered while trying to load weights. Are the weights there?')
         
     # train
-    # TODO: add checkpointing callback fn
-    #       add tb logging
+    '''
+    TODO:
+    callbacks for logging (e.g. tf.keras.callbacks.TensorBoard(log_dir='./logs') ),
+    lr sceduler (e.g. tf.keras.callbacks.LearningRateScheduler(lambda epoch: 1e-3 * 10**(epoch / 20))),
+    and early stopping (e.g. tf.keras.callbacks.EarlyStopping(patience=5, restore_best_weights=True) )
+    are passed to the callbacks argument of model.fit as a list
+    '''
 
     if train_params["train"]:
+
         train_args_dict = {'x':data_in['train_x'],
                         'y': data_in['train_y'],
                         "epochs": train_params['epochs'],
