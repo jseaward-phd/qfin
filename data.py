@@ -37,7 +37,7 @@ def get_yfin_data(*tickers: str, start=None, end=None) -> pd.DataFrame:
         tickers, auto_adjust=False, start=start, end=end, multi_level_index=True
     )
     for ticker in data.columns.levels[1]:
-        data["Perc_Change", ticker] = data["Close", ticker].pct_change()
+        data["Perc_Change", ticker] = data["Close", ticker].pct_change(fill_method=None)
     return data
 
 
@@ -75,6 +75,7 @@ def construct_dataset(
     if quantum:
         f_range = (0, 1)
 
+    df = df.dropna()
     # want to make a random selection of chunks
     chunk_length = seq_length + pred_samples
     num_chunks = len(df) // chunk_length

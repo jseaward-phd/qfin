@@ -161,10 +161,9 @@ class PQN:
                     if val_cost < min(val_loss):
                         self.best_weights = self.params
                         best_count = 0
-                val_loss.append(val_cost)
-                if verbose:
-                    print(f"\nEpoch {epoch} val loss: {val_cost:.5f}")
-
+                        print(
+                            f"Model params saved to {self.save_path} with validation cost {val_cost}."
+                        )
             if self.best_weights is not None:
                 self.params = self.best_weights
             if best_count > patience:
@@ -190,13 +189,18 @@ class PQN:
             else pred
         )
 
-    def evaluate(self, x, y, rescale: bool = False):
+    def evaluate(self, x, y, rescale: bool = False, verbose=False):
         pred_y = self.predict(x, rescale)
         if rescale and self.scaler is not None:
             y = self.scaler.inverse_transform(y.reshape([-1, 1]))
         if len(self.metrics) == 0:
+            if verbose:
+                print(self.loss_fn.__name__, ": ", self.loss_fn(y, pred_y))
             return self.loss_fn(y, pred_y)
         else:
+            if verbose:
+                for op in self.metrics:
+                    print(op.__name__, ": ", op(y, pred_y))
             return [op(y, pred_y) for op in self.metrics]
 
     def compare(self, x, y, rescale: bool = False):
@@ -211,3 +215,7 @@ class PQN:
         if fp is None:
             fp = self.save_path
         self.params = pickle.load(open(fp, "rb"))
+
+
+if __name__ == "__main__":
+    pass

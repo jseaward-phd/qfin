@@ -4,7 +4,9 @@ data:
    # horizon: 1 this has to be 1 due to the pqc architechture.
   ticker_symols:
     - AAPL
-  # data_path: null
+    - BTC-USD
+    - IAG.L
+  data_path: null
   preprocess: true
   start: null # yyyy-mm-dd or null for all past
   end: null   # yyyy-mm-dd or null for up to present
@@ -28,9 +30,9 @@ models:
         - mr
         - sdr
     train: &commtrain
-      epochs: 300
-      load_pretrained: False # can overwrite in model sections
-      save_dir: ./results # then do <model>/<ticker>/weights.pt & results
+      epochs: 1
+      load_pretrained: false # can overwrite in model sections
+      save_dir: ./results # then do <model>/<ticker>/<model> + weights.pt & results
   BiLSTM:
     init:
       <<: *comminit
@@ -40,6 +42,8 @@ models:
     train:
       <<: *commtrain
       train: true
+      pt_filename: best.weights.h5
+      weight_save_filename: trained.weights.h5
     test: true
   PQC:
     init:
@@ -50,6 +54,8 @@ models:
     train:
       <<: *commtrain
       train: true
+      pt_filename: best.params
+      weight_save_filename: trained.params
       kwargs:
         verbose: false
         batch_size: 30
