@@ -1,3 +1,4 @@
+fresh_start : true
 data:
   lengths: &seq_lens
     past_len: 16
@@ -6,17 +7,20 @@ data:
     - AAPL
     - BTC-USD
     - IAG.L
+    - GLD
+    - QQQ
+    - GBTC
   data_path: null
   preprocess: true
   start: null # yyyy-mm-dd or null for all past
-  end: null   # yyyy-mm-dd or null for up to present
+  end: 2021-06-07   # yyyy-mm-dd or null for up to present
   scale_range: # Scale range for the BiLSTM (PQC is always scalled 0 to 1)
     - 0.2
     - 0.8
   kwargs:
     test_frac: 0.25 # fraction of data to reserve for testing
     val_frac: 0.2 # fraction of the training set to use for validation. Set to 0 to forgo validation
-    colname: "Perc_Change" # or use "Colse"
+    colname: Close # "Perc_Change" # or use "Close"
   # preprocess: true
 # script:
 #   test: true
@@ -29,10 +33,12 @@ models:
         - sesd
         - mr
         - sdr
-      save_dir: ./results # then do <model>/<ticker>/<model> + weights.pt & results
+      save_dir: ./reproduction_results # then do <model>/<ticker>/<model> + weights.pt & results
     train: &commtrain
-      epochs: 1
+      epochs: 300
       load_pretrained: false # can overwrite in model sections
+      train: true            # ditto
+      test: true
   BiLSTM:
     init:
       <<: *comminit
@@ -42,9 +48,7 @@ models:
       pt_filename: best.weights.h5
     train:
       <<: *commtrain
-      train: true
       weight_save_filename: trained.weights.h5
-    test: true
   PQC:
     init:
       <<: *comminit
@@ -54,7 +58,6 @@ models:
       pt_filename: best.params
     train:
       <<: *commtrain
-      train: true
       weight_save_filename: trained.params
       kwargs:
         verbose: false
@@ -63,4 +66,3 @@ models:
         shuffle: true
         initial_epoch: 0
         validation_freq: 1
-    test: true

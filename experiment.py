@@ -8,6 +8,7 @@ Created on Tue May 20 14:40:34 2025
 
 import os
 import yaml
+import pickle
 
 # import pandas as pd # TODO: save results as csv
 
@@ -20,6 +21,14 @@ METRICS = {
     "mse": "mse",
     "qmse": metrics.qmse,
     "sesd": metrics.sesd,
+    "mr": metrics.mr,
+    "sdr": metrics.sdr,
+}
+
+EVAL_METRICS = {
+    "mse": metrics.mse_eval,
+    "qmse": metrics.qmse_eval,
+    "sesd": metrics.sesd_eval,
     "mr": metrics.mr,
     "sdr": metrics.sdr,
 }
@@ -44,6 +53,7 @@ def blstm_loop(blstm_config, data_dict):
             os.makedirs(stock_path)
 
         data_in = data_dict[ticker]
+        pickle.dump(data_in, open(os.path.join(stock_path, "data_dict.pkl"), "wb"))
         with open(os.path.join(stock_path, "log.txt"), "a") as f:
             with redirect_stdout(f):
                 model = build_BLSTM(
@@ -88,26 +98,21 @@ def blstm_loop(blstm_config, data_dict):
                     print(f"Model weights saved at {weight_save_path}.")
 
                 # test
-                if blstm_config["test"]:
+                if train_params["test"]:
                     print("\nUnscaled evaluation:")
                     model.evaluate(data_in["test_x"], data_in["test_y"])
+
+                    print("\nRescaled evaluation:")
                     y_pred = data_in["scaler"].inverse_transform(
-                        model.predict(data_in["test_x"])
+                        model(data_in["test_x"])
                     )
                     y_true = data_in["scaler"].inverse_transform(
                         data_in["test_y"].reshape([-1, 1])
                     )
-                    print("\nRescaled evaluation:")
+                    print("True:", y_true)
+                    print("Pred:", y_pred)
                     for m in init_params["metrics"]:
-                        # kind of hacky, is not so flexible for other loss functions
-                        if isinstance(METRICS[m], str):
-                            print(
-                                m,
-                                ": ",
-                                model.loss(y_true, y_pred).numpy().mean().item(),
-                            )
-                        else:
-                            print(m, ": ", METRICS[m](y_true, y_pred).numpy().item())
+                        print(m, ": ", EVAL_METRICS[m](y_true, y_pred).numpy().item())
     return
 
 
@@ -120,7 +125,7 @@ def pqc_loop(pqc_config, data_dict):
     del init_params["add_metrics"]
     train_params = pqc_config["train"]
 
-    metric_fns = [METRICS[x] for x in init_params["metrics"]]
+    metric_fns = [EVAL_METRICS[x] for x in init_params["metrics"]]
 
     for ticker in data_dict.keys():
 
@@ -130,7 +135,7 @@ def pqc_loop(pqc_config, data_dict):
             os.makedirs(stock_path)
 
         data_in = data_dict[ticker]
-
+        pickle.dump(data_in, open(os.path.join(stock_path, "data_dict.pkl"), "wb"))
         with open(os.path.join(stock_path, "log.txt"), "a") as f:
             with redirect_stdout(f):
                 pqc = PQN(
@@ -167,15 +172,15 @@ def pqc_loop(pqc_config, data_dict):
                     pqc.fit(**train_args_dict)
 
                 # test
-                if pqc_config["test"]:
-                    print("Rescaled output comparison:")
+                if train_params["test"]:
+                    print("\nRescaled output comparison:")
                     [
                         print(a, b.item())
                         for a, b in pqc.compare(
                             data_in["test_x"], data_in["test_y"], rescale=True
                         )
                     ]
-                    print("Rescaled evaluation:")
+                    print("\nRescaled evaluation:")
                     pqc.evaluate(
                         data_in["test_x"], data_in["test_y"], rescale=True, verbose=True
                     )
@@ -184,8 +189,19 @@ def pqc_loop(pqc_config, data_dict):
 
 
 def main(args):
-    CONFIG = yaml.safe_load(open("CONFIG.yaml", "r"))
-    # CONFIG = yaml.safe_load(open(args.config_path, "r"))
+    CONFIG = yaml.safe_load(open(args.config_path, "r"))
+
+    results_dir = CONFIG["models"]["common"]["init"]["save_dir"]
+    if CONFIG["fresh_start"] and os.path.exists(results_dir):
+        if len(os.listdir(results_dir)) > 0:
+            import shutil
+
+            shutil.rmtree(results_dir)
+
+    if not os.path.exists(results_dir):
+        os.makedirs(results_dir)
+    with open(os.path.join(results_dir, "passed_config.yaml"), "w") as f:
+        yaml.dump(CONFIG, f)
 
     # data setup
     # check if data path is a dir or file
@@ -216,7 +232,7 @@ def main(args):
     blstm_config = CONFIG["models"]["BiLSTM"]
     pqc_config = CONFIG["models"]["PQC"]
 
-    # blstm_loop(blstm_config, data_dict_BLSTM)
+    blstm_loop(blstm_config, data_dict_BLSTM)
     pqc_loop(pqc_config, data_dict_PQC)
 
     print("Done!")

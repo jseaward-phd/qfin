@@ -137,7 +137,7 @@ class PQN:
         else:
             val_x = None
 
-        val_loss = []
+        val_loss_list = []
         self.best_weights = None
 
         for epoch in trange(initial_epoch, epochs, unit="Epoch"):
@@ -157,13 +157,15 @@ class PQN:
             best_count += 1
             if val_x is not None and epoch % validation_freq == 0:
                 val_cost = self.cost(batch_train_x, self.params, batch_train_y)
-                if epoch > 0:
-                    if val_cost < min(val_loss):
+                if len(val_loss_list) > 0:
+                    if val_cost < min(val_loss_list):
                         self.best_weights = self.params
                         best_count = 0
+                        self.save(best=True)
                         print(
-                            f"Model params saved to {self.save_path} with validation cost {val_cost}."
+                            f"Model params saved at epoch {epoch} to {self.save_path} with validation cost {val_cost}."
                         )
+                val_loss_list.append(val_cost)
             if self.best_weights is not None:
                 self.params = self.best_weights
             if best_count > patience:
@@ -209,10 +211,13 @@ class PQN:
     def compare(self, x, y, rescale: bool = False):
         return list(zip([a.item() for a in self.predict(x, rescale=rescale)], y))
 
-    def save(self, fp=None):
+    def save(self, fp=None, best=False):
         if fp is None:
             fp = self.save_path
-        pickle.dump(self.params, open(fp, "wb"))
+        if best:
+            pickle.dump(self.best_weights, open(fp, "wb"))
+        else:
+            pickle.dump(self.params, open(fp, "wb"))
 
     def load(self, fp=None):
         if fp is None:
