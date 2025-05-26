@@ -25,15 +25,6 @@ METRICS = {
     "sdr": metrics.sdr,
 }
 
-EVAL_METRICS = {
-    "mse": metrics.mse_eval,
-    "qmse": metrics.qmse_eval,
-    "sesd": metrics.sesd_eval,
-    "mr": metrics.mr,
-    "sdr": metrics.sdr,
-}
-
-
 def blstm_loop(blstm_config, data_dict):
     from models.BiLSTM import build_BLSTM
 
@@ -112,7 +103,7 @@ def blstm_loop(blstm_config, data_dict):
                     print("True:", y_true)
                     print("Pred:", y_pred)
                     for m in init_params["metrics"]:
-                        print(m, ": ", EVAL_METRICS[m](y_true, y_pred).numpy().item())
+                        print(m, ": ", METRICS[m](y_true, y_pred).numpy().item())
     return
 
 
@@ -125,7 +116,7 @@ def pqc_loop(pqc_config, data_dict):
     del init_params["add_metrics"]
     train_params = pqc_config["train"]
 
-    metric_fns = [EVAL_METRICS[x] for x in init_params["metrics"]]
+    metric_fns = [METRICS[x] for x in init_params["metrics"]]
 
     for ticker in data_dict.keys():
 

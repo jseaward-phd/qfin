@@ -29,20 +29,5 @@ def sdr(y_true, y_pred):
 def qmse(y_true, y_pred):
     return mean((y_true - stack(y_pred)) ** 2)
 
-
-# eval functions for rescaled values
-def sesd_eval(y_true, y_pred):
-    sq = (y_true - y_pred) ** 2 / y_true
-    return math.reduce_std(sq)
-
-
-def mse_eval(y_true, y_pred):
-    return math.reduce_mean((y_true - y_pred) ** 2 / y_true)
-
-
-def qmse_eval(y_true, y_pred):
-    return mean((y_true - stack(y_pred)) ** 2 / y_true)
-
-
 if __name__ == "__main__":
     pass
