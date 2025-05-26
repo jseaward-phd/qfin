@@ -5,6 +5,9 @@ Created on Sat May 17 13:00:30 2025
 
 @author: rakshat
 """
+import os
+
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 import tensorflow as tf
 from tensorflow import keras as K
@@ -13,7 +16,6 @@ from .metrics import sesd, mr, sdr
 
 
 # build model
-# TODO: config setting/file
 def build_BLSTM(
     input_len: int = 16,
     horizon: int = 1,
@@ -50,9 +52,6 @@ def build_BLSTM(
         metrics=metrics,
     )
     return model
-
-
-# TODO:    test and comparison functions that undo the scaling
 
 
 if __name__ == "__main__":
