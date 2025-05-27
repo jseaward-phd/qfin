@@ -17,7 +17,7 @@ data:
   kwargs:
     test_frac: 0.25 # fraction of data to reserve for testing
     val_frac: 0.2 # fraction of the training set to use for validation. Set to 0 to forgo validation
-    colname: "Perc_Change" # or use "Close"
+    colname: Perc_Change # or use "Close"
 models:
   common:
     init: &comminit
@@ -54,7 +54,7 @@ models:
       <<: *commtrain
       weight_save_filename: trained.params
       kwargs:
-        verbose: false
+        verbose: true
         batch_size: 30
         patience: 25
         shuffle: true
