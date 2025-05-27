@@ -26,7 +26,6 @@ warnings.warn = warn
 
 from models.pqc import PQN
 from models.BiLSTM import build_BLSTM
-from models.metrics import qmse
 
 
 def get_fresh_data(tickers, start, colname):  # needs to use tthe different scalers...
@@ -94,9 +93,10 @@ def main(args):
                 blstm_model.load_weights(pt_weight_path)
                 print("BiLSTM Unscaled evaluation:")
                 blstm_model.evaluate(test_x, test_y)
-                prediction = blstm_model(
-                    fresh_data_dict[ticker].to_numpy().reshape([1, -1, 1])
-                ).numpy()
+                dat = fresh_data_dict[ticker].to_numpy()
+                if scaler is not None:
+                    dat = scaler.transform(dat.reshape([-1, 1]))
+                prediction = blstm_model(dat.reshape([1, -1])).numpy()
                 if scaler is not None:
                     prediction = scaler.inverse_transform(prediction.reshape([1, -1]))
                 print(
@@ -108,12 +108,13 @@ def main(args):
                     os.path.join(root_dir, ticker, model_name, pqc_weight_fn)
                 )
                 print("PQC Unscaled evaluation:")
-                results = pqc_model.evaluate(
-                    test_x, test_y, rescale=False, verbose=True
-                )
+                _ = pqc_model.evaluate(test_x, test_y, rescale=False, verbose=True)
+                dat = fresh_data_dict[ticker].to_numpy()
+                if scaler is not None:
+                    dat = scaler.transform(dat.reshape([-1, 1]))
                 prediction = pqc_model.predict(
-                    fresh_data_dict[ticker].to_numpy().reshape([1, -1, 1]),
-                    rescale=scaler is not None,
+                    dat,
+                    rescale=(scaler is not None),
                 ).item()
 
                 print(

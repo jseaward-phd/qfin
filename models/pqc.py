@@ -20,7 +20,9 @@ from os import PathLike
 
 # horizon set at 1, layers at 6, as in paper
 # need to parrallelize/batch this correctly
-def build_pqn_and_params(input_len: int = 16, blocks=2):
+def build_pqn_and_params(
+    input_len: int = 16, blocks=2, random_init_weights: bool = True
+):
 
     dev = qml.device("default.qubit", wires=input_len + 1)
     read_out_wire = input_len
@@ -62,8 +64,14 @@ def build_pqn_and_params(input_len: int = 16, blocks=2):
 
         return qml.expval(qml.Z(read_out_wire))
 
-    params = qml.math.stack(
-        [np.random.rand(3, input_len, requires_grad=True) for _ in range(blocks)]
+    params = (
+        qml.math.stack(
+            [np.random.rand(3, input_len, requires_grad=True) for _ in range(blocks)]
+        )
+        if random_init_weights
+        else qml.math.stack(
+            [np.ones([3, input_len], requires_grad=True) / 2 for _ in range(blocks)]
+        )
     )
     return circuit, params
 
@@ -78,11 +86,12 @@ class PQN:
         metrics: Iterable[Callable] = [],
         scaler=None,
         save_path: PathLike = None,
-        # batched:bool=True,
+        random_init_weights: bool = True,
     ):
-        self.pqn, self.params = build_pqn_and_params(input_len=input_len, blocks=blocks)
-        # if batched:
-        #     self.pqn = qml.batch_input(self.pqn, argnum=0)
+        self.pqn, self.params = build_pqn_and_params(
+            input_len=input_len, blocks=blocks, random_init_weights=random_init_weights
+        )
+        self.random_init_weights = random_init_weights
         self.opt = optimizer()
         self.loss_fn = loss_fn
         self.scaler = scaler
@@ -155,7 +164,7 @@ class PQN:
                 x, y = utils.shuffle(x, y)
             # Run validation.
             best_count += 1
-            if val_x is not None and epoch % validation_freq == 0:
+            if (val_x is not None) and (epoch % validation_freq == 0):
                 val_cost = self.cost(batch_train_x, self.params, batch_train_y)
                 if len(val_loss_list) > 0:
                     if val_cost < min(val_loss_list):
@@ -187,13 +196,13 @@ class PQN:
 
         return (
             self.scaler.inverse_transform(pred.reshape([-1, 1]))
-            if self.scaler is not None and rescale
+            if (self.scaler is not None) and rescale
             else pred
         )
 
     def evaluate(self, x, y, rescale: bool = False, verbose=False):
         pred_y = self.predict(x, rescale)
-        if rescale and self.scaler is not None:
+        if rescale and (self.scaler is not None):
             y = self.scaler.inverse_transform(y.reshape([-1, 1]))
         if len(self.metrics) == 0:
             if verbose:
@@ -209,6 +218,8 @@ class PQN:
             return [op(y, pred_y) for op in self.metrics]
 
     def compare(self, x, y, rescale: bool = False):
+        if (self.scaler is not None) and rescale:
+            y = self.scaler.inverse_transform(y.reshape([-1, 1]))
         return list(zip([a.item() for a in self.predict(x, rescale=rescale)], y))
 
     def save(self, fp=None, best=False):

@@ -9,6 +9,7 @@ Created on Tue May 20 14:40:34 2025
 import os
 import yaml
 import pickle
+import numpy as np
 
 # import pandas as pd # TODO: save results as csv
 
@@ -55,6 +56,10 @@ def blstm_loop(blstm_config, data_dict):
                 )
 
                 pt_weight_path = os.path.join(stock_path, init_params["pt_filename"])
+                weight_save_path = os.path.join(
+                    stock_path, train_params["weight_save_filename"]
+                )
+
                 if train_params["load_pretrained"]:
                     print(f"Loading weights from {pt_weight_path}...")
                     try:
@@ -75,9 +80,6 @@ def blstm_loop(blstm_config, data_dict):
                 """
 
                 if train_params["train"]:
-                    weight_save_path = os.path.join(
-                        stock_path, train_params["weight_save_filename"]
-                    )
                     train_args_dict = {
                         "x": data_in["train_x"],
                         "y": data_in["train_y"],
@@ -91,6 +93,8 @@ def blstm_loop(blstm_config, data_dict):
 
                 # test
                 if train_params["test"]:
+                    print(f"Loading weights from: {weight_save_path}")
+                    model.load_weights(weight_save_path)
                     print("\nUnscaled evaluation:")
                     model.evaluate(data_in["test_x"], data_in["test_y"])
 
@@ -104,7 +108,10 @@ def blstm_loop(blstm_config, data_dict):
                     print("True:", y_true)
                     print("Pred:", y_pred)
                     for m in init_params["metrics"]:
-                        print(m, ": ", METRICS[m](y_true, y_pred).numpy().item())
+                        if m == "mse":
+                            print(m, ": ", np.mean((y_true - y_pred) ** 2))
+                        else:
+                            print(m, ": ", METRICS[m](y_true, y_pred).numpy().item())
     return
 
 
@@ -125,6 +132,9 @@ def pqc_loop(pqc_config, data_dict):
         stock_path = os.path.join(init_params["save_dir"], ticker, "PQC")
         if not os.path.exists(stock_path):
             os.makedirs(stock_path)
+        weight_save_path = os.path.join(
+            stock_path, train_params["weight_save_filename"]
+        )
 
         data_in = data_dict[ticker]
         pickle.dump(data_in, open(os.path.join(stock_path, "data_dict.pkl"), "wb"))
@@ -135,9 +145,8 @@ def pqc_loop(pqc_config, data_dict):
                     blocks=init_params["blocks"],
                     metrics=metric_fns,
                     scaler=data_in["scaler"],
-                    save_path=os.path.join(
-                        stock_path, train_params["weight_save_filename"]
-                    ),
+                    save_path=weight_save_path,
+                    random_init_weights=init_params["random_init_weights"],
                 )
 
                 pt_weight_path = os.path.join(stock_path, init_params["pt_filename"])
@@ -165,6 +174,8 @@ def pqc_loop(pqc_config, data_dict):
 
                 # test
                 if train_params["test"]:
+                    print(f"Loading weights from: {weight_save_path}")
+                    pqc.load(weight_save_path)
                     print("\nRescaled output comparison:")
                     [
                         print(a, b.item())
@@ -175,6 +186,13 @@ def pqc_loop(pqc_config, data_dict):
                     print("\nRescaled evaluation:")
                     pqc.evaluate(
                         data_in["test_x"], data_in["test_y"], rescale=True, verbose=True
+                    )
+                    print("\nUnscaled evaluation:")
+                    pqc.evaluate(
+                        data_in["test_x"],
+                        data_in["test_y"],
+                        rescale=False,
+                        verbose=True,
                     )
 
     return

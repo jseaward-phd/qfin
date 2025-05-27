@@ -1,4 +1,4 @@
-fresh_start : false
+fresh_start : true
 data:
   lengths: &seq_lens
     past_len: 16
@@ -7,9 +7,6 @@ data:
     - AAPL
     - BTC-USD
     - IAG.L
-    - GLD
-    - QQQ
-    - GBTC
   data_path: null
   preprocess: true
   start: null # yyyy-mm-dd or null for all past
@@ -33,7 +30,7 @@ models:
     train: &commtrain
       epochs: 300
       load_pretrained: false # can overwrite in model sections
-      train: false            # ditto
+      train: true            # ditto
       test: true
   BiLSTM:
     init:
