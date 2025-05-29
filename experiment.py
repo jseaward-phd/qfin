@@ -216,7 +216,7 @@ def main(args):
     # data setup
     # check if data path is a dir or file
     data_params = CONFIG["data"]
-    tickers = data_params["ticker_symols"]
+    tickers = data_params["ticker_symbols"]
     start = data_params["start"]
     end = data_params["end"]
     seq_length = data_params["lengths"]["past_len"]

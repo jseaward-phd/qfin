@@ -3,7 +3,7 @@ data:
   lengths: &seq_lens
     past_len: 16
    # horizon: 1 this has to be 1 due to the pqc architechture.
-  ticker_symols:
+  ticker_symbols:
     - AAPL
     - BTC-USD
     - IAG.L
